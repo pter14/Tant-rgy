@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Órarend Segédlet</title>
+</head>
+<body>
+
+<h2>Osztály hozzáadása</h2>
+<form action="/add_class" method="post">
+    Azonosító (pl. 8A): <input name="class_id">
+    <button type="submit">Hozzáadás</button>
+</form>
+
+<h3>Jelenlegi osztályok:</h3>
+<ul>
+{% for c in data.classes %}
+<li>{{c.id}} → {{c.name}}</li>
+{% endfor %}
+</ul>
+
+<hr>
+
+<h2>Tantárgy hozzáadása</h2>
+<form action="/add_subject" method="post">
+    Tantárgy neve: <input name="subject_name"><br><br>
+    {% for c in data.classes %}
+        {{c.name}} óraszám: <input type="number" name="hours_{{c.id}}" value="0"><br>
+    {% endfor %}
+    <button type="submit">Hozzáadás</button>
+</form>
+
+<hr>
+
+<h2>Tanár hozzáadása</h2>
+<form action="/add_teacher" method="post">
+    Név: <input name="teacher_name"><br>
+    Heti óraszám: <input type="number" name="weekly_hours"><br><br>
+
+    <strong>Tantárgyak:</strong><br>
+    {% for s in data.subjects %}
+        <input type="checkbox" name="subjects" value="{{s.id}}"> {{s.name}}<br>
+    {% endfor %}
+
+    <br>
+    <strong>Fix osztályok:</strong><br>
+    {% for c in data.classes %}
+        <input type="checkbox" name="classes" value="{{c.id}}"> {{c.name}}<br>
+    {% endfor %}
+
+    <br>
+    <button type="submit">Hozzáadás</button>
+</form>
+
+<hr>
+
+<h2>Export</h2>
+<a href="/export" target="_blank">JSON megtekintése</a>
+
+</body>
+</html>
