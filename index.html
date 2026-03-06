@@ -12,6 +12,7 @@
     ul { margin:6px 0 0; padding-left: 20px; }
     table { border-collapse: collapse; width:100%; }
     table td, table th { border: 1px solid #ccc; padding:6px; }
+    button.small { font-size: 0.8rem; padding:4px 6px; margin-left:6px; }
   </style>
 </head>
 <body>
@@ -37,7 +38,7 @@
     <button id="add_subject_btn">Tantárgy hozzáadása</button>
 
     <h3>Jelenlegi tantárgyak</h3>
-    <table id="subjects_table"><thead><tr><th>ID</th><th>Név</th><th>Óraszám (osztályok)</th></tr></thead><tbody></tbody></table>
+    <table id="subjects_table"><thead><tr><th>ID</th><th>Név</th><th>Óraszám (osztályok)</th><th>Művelet</th></tr></thead><tbody></tbody></table>
   </section>
 
   <section id="teachers-section">
@@ -63,13 +64,17 @@
 
   <section>
     <h2>Export / JSON</h2>
-    <a href="/export" target="_blank">JSON megtekintése</a>
+    <a href="/export" target="_blank">JSON megtekintése</a> |
+    <a href="/download" target="_blank">data.json letöltése</a>
   </section>
 
 <script>
+let currentData = null;
+
 async function fetchData(){
   const resp = await fetch('/data');
   const j = await resp.json();
+  currentData = j.data;
   return j.data;
 }
 
@@ -78,7 +83,9 @@ function renderClasses(classes){
   ul.innerHTML = '';
   classes.forEach(c => {
     const li = document.createElement('li');
-    li.textContent = `${c.id} → ${c.name}`;
+    li.innerHTML = `${c.id} → ${c.name}
+      <button class="small" onclick="editClass('${c.id}')">Szerkesztés</button>
+      <button class="small" onclick="deleteClass('${c.id}')">Törlés</button>`;
     ul.appendChild(li);
   });
   // render subject-hours inputs area
@@ -109,9 +116,13 @@ function renderSubjects(subjects, classes){
   const tbody = document.querySelector('#subjects_table tbody');
   tbody.innerHTML = '';
   subjects.forEach(s => {
-    const tr = document.createElement('tr');
     const perClass = Object.entries(s.per_class_weekly_hours || {}).map(([k,v]) => `${k}:${v}`).join(', ');
-    tr.innerHTML = `<td>${s.id}</td><td>${s.name}</td><td>${perClass}</td>`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.id}</td><td>${s.name}</td><td>${perClass}</td>
+      <td>
+        <button class="small" onclick="editSubject('${s.id}')">Szerkesztés</button>
+        <button class="small" onclick="deleteSubject('${s.id}')">Törlés</button>
+      </td>`;
     tbody.appendChild(tr);
   });
 
@@ -131,7 +142,9 @@ function renderTeachers(teachers){
   ul.innerHTML = '';
   teachers.forEach(t => {
     const li = document.createElement('li');
-    li.textContent = `${t.id} — ${t.name} — heti: ${t.weekly_required_hours} — tantárgyak: ${t.teaches_subjects.join(', ')} — fix: ${t.fixed_classes.join(', ')}`;
+    li.innerHTML = `${t.id} — ${t.name} — heti: ${t.weekly_required_hours} — tantárgyak: ${t.teaches_subjects.join(', ')} — fix: ${t.fixed_classes.join(', ')}
+      <button class="small" onclick="editTeacher('${t.id}')">Szerkesztés</button>
+      <button class="small" onclick="deleteTeacher('${t.id}')">Törlés</button>`;
     ul.appendChild(li);
   });
 }
@@ -143,6 +156,7 @@ async function refreshAll(){
   renderTeachers(data.teachers);
 }
 
+// ---- Add handlers (unchanged) ----
 document.getElementById('add_class_btn').addEventListener('click', async ()=>{
   const inp = document.getElementById('class_id_input');
   const err = document.getElementById('class_error');
@@ -166,7 +180,6 @@ document.getElementById('add_subject_btn').addEventListener('click', async ()=>{
   err.textContent = '';
   if(!name){ err.textContent = 'Adj meg tantárgynevet!'; return; }
 
-  // collect hours
   const inputs = document.querySelectorAll('.subject-hours-input');
   const per_class = {};
   inputs.forEach(i=>{
@@ -191,12 +204,10 @@ document.getElementById('add_teacher_btn').addEventListener('click', async ()=>{
   err.textContent = '';
   if(!name){ err.textContent = 'Adj meg tanár nevet!'; return; }
 
-  // collect selected subjects
   const subjChecks = document.querySelectorAll('#teacher_subjects_container input[type=checkbox]');
   const teaches = [];
   subjChecks.forEach(cb => { if(cb.checked) teaches.push(cb.value); });
 
-  // collect selected classes
   const classChecks = document.querySelectorAll('#teacher_classes_container input[type=checkbox]');
   const fixed = [];
   classChecks.forEach(cb => { if(cb.checked) fixed.push(cb.value); });
@@ -213,7 +224,113 @@ document.getElementById('add_teacher_btn').addEventListener('click', async ()=>{
   await refreshAll();
 });
 
-// initial load
+// ---- Edit / Delete functions ----
+
+async function editClass(id){
+  const cls = currentData.classes.find(c => c.id === id);
+  if(!cls) return alert("Nem található az osztály.");
+  const newName = prompt("Új megjelenítendő név az osztályhoz:", cls.name);
+  if(newName === null) return; // cancel
+  const resp = await fetch('/update_class', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id: id, new_name: newName})
+  });
+  const j = await resp.json();
+  if(!j.success) return alert(j.error || "Hiba");
+  await refreshAll();
+}
+
+async function deleteClass(id){
+  if(!confirm("Biztos törlöd az osztályt? (Ez eltávolítja az óraszám-beállításokat is a tantárgyaknál és a tanárok fixed listájából)")) return;
+  const resp = await fetch('/delete_class', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id: id})
+  });
+  const j = await resp.json();
+  if(!j.success) return alert(j.error || "Hiba");
+  await refreshAll();
+}
+
+async function editSubject(id){
+  const subj = currentData.subjects.find(s => s.id === id);
+  if(!subj) return alert("Nem található a tantárgy.");
+  const newName = prompt("Új tantárgynév:", subj.name);
+  if(newName === null) return;
+  // kérdezzük meg osztályonként az óraszámot
+  const per_class = {};
+  for(const cl of currentData.classes){
+    const cur = subj.per_class_weekly_hours && subj.per_class_weekly_hours[cl.id] ? subj.per_class_weekly_hours[cl.id] : 0;
+    const ans = prompt(`Heti óraszám - ${cl.name} (0 = nincs):`, String(cur));
+    if(ans === null) return; // megszakítjuk ha cancel
+    const v = parseInt(ans||"0", 10);
+    per_class[cl.id] = isNaN(v) ? 0 : v;
+  }
+  const resp = await fetch('/update_subject', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id: id, new_name: newName, per_class_weekly_hours: per_class})
+  });
+  const j = await resp.json();
+  if(!j.success) return alert(j.error || "Hiba");
+  await refreshAll();
+}
+
+async function deleteSubject(id){
+  if(!confirm("Biztos törlöd a tantárgyat? (Eltávolítja a tanárok tantárgylistájából is)")) return;
+  const resp = await fetch('/delete_subject', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id: id})
+  });
+  const j = await resp.json();
+  if(!j.success) return alert(j.error || "Hiba");
+  await refreshAll();
+}
+
+async function editTeacher(id){
+  const t = currentData.teachers.find(x => x.id === id);
+  if(!t) return alert("Nem található a tanár.");
+  const newName = prompt("Új név:", t.name);
+  if(newName === null) return;
+  const weekly = prompt("Heti óraszám:", String(t.weekly_required_hours || 0));
+  if(weekly === null) return;
+  // tantárgyak: kérdezzük meg igen/nem minden tantárgynál
+  const teaches = [];
+  for(const s of currentData.subjects){
+    const cur = t.teaches_subjects && t.teaches_subjects.includes(s.id);
+    const ans = confirm(`Tanítja a tanár a(z) ${s.name} tantárgyat? (OK = igen, Mégse = nem)\n(Jelenleg: ${cur ? "igen" : "nem"})`);
+    if(ans) teaches.push(s.id);
+  }
+  const fixed = [];
+  for(const c of currentData.classes){
+    const curf = t.fixed_classes && t.fixed_classes.includes(c.id);
+    const ans = confirm(`Fix osztály? ${c.name} (OK = igen, Mégse = nem)\n(Jelenleg: ${curf ? "igen" : "nem"})`);
+    if(ans) fixed.push(c.id);
+  }
+  const resp = await fetch('/update_teacher', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id: id, new_name: newName, weekly_hours: weekly, teaches: teaches, fixed_classes: fixed})
+  });
+  const j = await resp.json();
+  if(!j.success) return alert(j.error || "Hiba");
+  await refreshAll();
+}
+
+async function deleteTeacher(id){
+  if(!confirm("Biztos törlöd a tanárt?")) return;
+  const resp = await fetch('/delete_teacher', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({id: id})
+  });
+  const j = await resp.json();
+  if(!j.success) return alert(j.error || "Hiba");
+  await refreshAll();
+}
+
 refreshAll();
 </script>
 </body>
