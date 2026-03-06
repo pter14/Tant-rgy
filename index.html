@@ -2,55 +2,86 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Órarend segédlet — inline validáció</title>
+  <title>Órarend segédlet — jobb UX</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 16px; background:#f7f7f8; }
     section { margin-bottom: 18px; background:#fff; border: 1px solid #e3e3e6; padding: 12px; border-radius: 8px;}
+    h2.block-title { display:flex; align-items:center; gap:8px; }
     label { display:block; margin:6px 0 2px; font-weight:600; }
     .row { display:flex; gap:12px; align-items:center; margin-bottom:8px;}
-    .error { color: #b00; margin-top:6px; font-size:0.95rem;}
-    .hint { color:#666; font-size:0.9rem; }
-    input[type="text"], input[type="number"] { padding:8px; border:1px solid #ccc; border-radius:6px; }
-    ul { margin:6px 0 0; padding-left: 20px; }
-    table { border-collapse: collapse; width:100%; background:white; }
-    table td, table th { border: 1px solid #e0e0e0; padding:8px; }
-    button.small { font-size: 0.85rem; padding:6px 8px; margin-left:6px; }
+    input[type="text"], input[type="number"] { padding:8px; border:1px solid #ccc; border-radius:6px; min-width:160px; }
+    .muted { color:#666; font-size:0.95rem; }
     .btn { padding:8px 12px; border-radius:6px; border:1px solid #bbb; background:#fff; cursor:pointer; }
     .btn-primary { background:#0b6cff; color:white; border-color:#0860d6; }
-    .muted { color:#666; font-size:0.95rem; }
-    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.4); display:none; align-items:center; justify-content:center; z-index:2000; }
-    .modal { background:white; border-radius:8px; width:720px; max-width:95%; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
-    .modal h3 { margin-top:0; }
+    .small { font-size:0.85rem; padding:6px 8px; }
+
+    /* Inline messages area */
+    .inline-area { min-height:22px; margin-top:6px; transition: opacity .18s ease, transform .18s ease; }
+    .inline-area .note { color:#555; font-size:0.92rem; visibility:hidden; opacity:0; transform:translateY(-3px); }
+    .inline-area .note.visible { visibility:visible; opacity:1; transform:translateY(0); }
+    .inline-area .error { color:#b00; font-size:0.95rem; visibility:hidden; opacity:0; transform:translateY(-3px); }
+    .inline-area .error.visible { visibility:visible; opacity:1; transform:translateY(0); }
+
+    /* disable look */
+    .disabled { opacity:0.55; pointer-events:none; }
+
+    /* modal basics */
+    .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.35); display:none; align-items:center; justify-content:center; z-index:2000; }
+    .modal { background:white; border-radius:8px; width:600px; max-width:94%; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
+    .close-x { float:right; cursor:pointer; color:#888; font-weight:bold; }
+    #toast { position:fixed; right:20px; bottom:20px; background:#222; color:#fff; padding:8px 12px; border-radius:6px; display:none; z-index:3000; opacity:0.95; }
     .checkbox-grid { display:flex; flex-wrap:wrap; gap:8px; }
     .checkbox-grid label { display:flex; gap:6px; align-items:center; background:#f2f6ff; padding:6px 8px; border-radius:6px; border:1px solid #e1e8ff; }
-    #toast { position:fixed; right:20px; bottom:20px; background:#222; color:#fff; padding:8px 12px; border-radius:6px; display:none; z-index:3000; opacity:0.95; }
-    .disabled { opacity:0.55; pointer-events: none; }
-    .inline-note { font-size:0.9rem; color:#555; margin-top:4px; }
+
+    /* keep table simple */
+    table { border-collapse: collapse; width:100%; background:white; }
+    table td, table th { border: 1px solid #e0e0e0; padding:8px; }
+
+    /* subtle input error border */
+    input.invalid { border-color:#b00; box-shadow: 0 0 0 3px rgba(176,0,0,0.05); }
   </style>
 </head>
 <body>
-  <h1>Órarend segédlet — Adatbevitel</h1>
+  <h1>Órarend segédlet</h1>
 
+  <!-- INFO MODAL -->
+  <div id="modal_info" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <span class="close-x" onclick="closeModal('modal_info')">✕</span>
+      <h3 id="info_title">Segítség</h3>
+      <div id="info_text" style="margin-top:8px; color:#333; line-height:1.4;"></div>
+      <div style="margin-top:12px; text-align:right;">
+        <button class="btn" onclick="closeModal('modal_info')">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLASSES -->
   <section id="classes-section">
-    <h2>Osztályok</h2>
+    <h2 class="block-title">Osztályok <button class="small btn" onclick="openInfo('classes')">Info</button></h2>
     <div class="row">
-      <input id="class_id_input" placeholder="Pl. 8A" type="text">
+      <input id="class_id_input" placeholder="Pl. 8A" type="text" aria-label="Osztály azonosító">
       <button id="add_class_btn" class="btn">Hozzáadás</button>
       <span class="muted">Azonosító alapján automatikus név (pl. 8A → 8.a)</span>
     </div>
-    <div id="class_error" class="error" aria-live="polite"></div>
-    <div id="class_hint" class="inline-note"></div>
+    <div class="inline-area" aria-live="polite">
+      <div id="class_note" class="note"></div>
+      <div id="class_error" class="error"></div>
+    </div>
     <h3>Jelenlegi osztályok:</h3>
-    <ul id="class_list"></ul>
+    <ul id="class_list" aria-live="polite"></ul>
   </section>
 
+  <!-- SUBJECTS -->
   <section id="subjects-section">
-    <h2>Tantárgy hozzáadása</h2>
+    <h2 class="block-title">Tantárgyak <button class="small btn" onclick="openInfo('subjects')">Info</button></h2>
     <label>Tantárgy neve</label>
-    <input id="subject_name_input" placeholder="Pl. Matematika" type="text">
-    <div id="subject_generated_id" class="inline-note"></div>
+    <input id="subject_name_input" placeholder="Pl. Matematika" type="text" aria-label="Tantárgy neve">
+    <div class="inline-area">
+      <div id="subject_generated_id" class="note"></div>
+      <div id="subject_error" class="error"></div>
+    </div>
     <div id="subject_hours_container" style="margin-top:8px;"></div>
-    <div id="subject_error" class="error" aria-live="polite"></div>
     <div style="margin-top:8px;">
       <button id="add_subject_btn" class="btn btn-primary">Tantárgy hozzáadása</button>
     </div>
@@ -59,11 +90,13 @@
     <table id="subjects_table"><thead><tr><th>ID</th><th>Név</th><th>Óraszám (osztályok)</th><th>Művelet</th></tr></thead><tbody></tbody></table>
   </section>
 
+  <!-- TEACHERS -->
   <section id="teachers-section">
-    <h2>Tanár hozzáadása</h2>
+    <h2 class="block-title">Tanárok <button class="small btn" onclick="openInfo('teachers')">Info</button></h2>
     <label>Név</label>
-    <input id="teacher_name_input" placeholder="Kovács Anna" type="text">
-    <div id="teacher_generated_id" class="inline-note"></div>
+    <input id="teacher_name_input" placeholder="Kovács Anna" type="text" aria-label="Tanár neve">
+    <div class="inline-area"><div id="teacher_generated_id" class="note"></div><div id="teacher_error" class="error"></div></div>
+
     <label>Heti óraszám</label>
     <input id="teacher_weekly_input" type="number" min="0" value="18">
     <div style="margin-top:8px;">
@@ -74,13 +107,12 @@
       <strong>Fix osztályok:</strong>
       <div id="teacher_classes_container" class="checkbox-grid"></div>
     </div>
-    <div id="teacher_error" class="error" aria-live="polite"></div>
     <div style="margin-top:8px;">
       <button id="add_teacher_btn" class="btn btn-primary">Tanár hozzáadása</button>
     </div>
 
     <h3 style="margin-top:12px;">Jelenlegi tanárok</h3>
-    <ul id="teacher_list"></ul>
+    <ul id="teacher_list" aria-live="polite"></ul>
   </section>
 
   <section>
@@ -89,16 +121,14 @@
     <a href="/download" target="_blank">data.json letöltése</a>
   </section>
 
-  <div id="toast"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
 
-  <!-- MODALs as before (omitted here for brevity) -->
-  <!-- Use the same modal HTML you already have — keep modal IDs: modal_class, modal_subject, modal_teacher -->
-  <!-- For simplicity in this snippet assume your existing modal HTML is unchanged and present below (not duplicated here). -->
+  <!-- Keep your existing edit modals here (modal_class, modal_subject, modal_teacher) -->
+  <!-- For brevity: assume they are present as in your previous template and keep their IDs unchanged. -->
 
 <script>
-/* ---------- helper normalization (same as server) ---------- */
+/* ---------- helper normalization ---------- */
 function normalizeLocal(text){
-  // basic accent removal using textarea trick
   try{
     const s = text.normalize('NFD').replace(/[\u0300-\u036f]/g, "");
     return s.toLowerCase().replace(/\s+/g, '');
@@ -107,268 +137,267 @@ function normalizeLocal(text){
   }
 }
 
-/* ---------- state ---------- */
+/* ---------- state and touched flags ---------- */
 let currentData = null;
+const touched = {
+  class_id_input: false,
+  subject_name_input: false,
+  teacher_name_input: false,
+  teacher_weekly_input: false
+};
 
-/* ---------- utility ---------- */
+/* ---------- fetch / render (reuse previous safe functions) ---------- */
 async function fetchData(){
   const resp = await fetch('/data');
   const j = await resp.json();
   currentData = j.data;
   return j.data;
 }
-function showToast(msg, timeout=1800){
+
+function showToast(msg, timeout=1600){
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.display = 'block';
+  t.textContent = msg; t.style.display = 'block';
   setTimeout(()=> t.style.display = 'none', timeout);
 }
 
-/* ---------- renderers (same as before, but removed duplication for brevity) ---------- */
-/* We'll re-use the previous rendering functions - assume they exist exactly as in your modal version */
-/* For clarity, include minimal needed renderers here: */
-
+/* Renderers (simplified, same logic as before) */
 function renderClasses(classes){
   const ul = document.getElementById('class_list'); ul.innerHTML = '';
-  classes.forEach(c => {
-    const li = document.createElement('li');
+  classes.forEach(c=>{
+    const li=document.createElement('li');
     li.innerHTML = `<strong>${c.id}</strong> → ${c.name}
-      <button class="small" onclick="openEditClass('${c.id}')">Szerkesztés</button>
-      <button class="small" onclick="deleteClass('${c.id}')">Törlés</button>`;
+      <button class="small btn" onclick="openEditClass('${c.id}')">Szerkesztés</button>
+      <button class="small btn" onclick="deleteClass('${c.id}')">Törlés</button>`;
     ul.appendChild(li);
   });
 
-  // build subject hours inputs
+  // subject-hours inputs
   const container = document.getElementById('subject_hours_container');
   container.innerHTML = '';
-  if(classes.length === 0){
-    container.textContent = 'Először adj meg osztályt.';
-  } else {
-    classes.forEach(c => {
-      const div = document.createElement('div');
+  if(classes.length===0){ container.textContent='Először adj meg osztályt.'; }
+  else{
+    classes.forEach(c=>{
+      const div=document.createElement('div');
       div.innerHTML = `<label>${c.name} óraszám:</label><input type="number" min="0" value="0" data-classid="${c.id}" class="subject-hours-input">`;
       container.appendChild(div);
     });
   }
 
-  // teacher classes checkboxes
-  const tc = document.getElementById('teacher_classes_container'); tc.innerHTML = '';
-  classes.forEach(c => {
-    const d = document.createElement('label');
-    d.innerHTML = `<input type="checkbox" value="${c.id}"> ${c.name}`;
-    tc.appendChild(d);
+  // teacher classes checkbox
+  const tc = document.getElementById('teacher_classes_container'); tc.innerHTML='';
+  classes.forEach(c=>{
+    const d=document.createElement('label'); d.innerHTML = `<input type="checkbox" value="${c.id}"> ${c.name}`; tc.appendChild(d);
   });
 
-  // modal edit classes (keep if using modals)
+  // prepare edit modal classes (if used)
+  const etc = document.getElementById('edit_teacher_classes'); if(etc) { etc.innerHTML=''; classes.forEach(c=>{ const id='edit_teach_class_'+c.id; const d=document.createElement('label'); d.innerHTML=`<input type="checkbox" id="${id}" value="${c.id}"> ${c.name}`; etc.appendChild(d); }); }
 }
 
 function renderSubjects(subjects, classes){
-  const tbody = document.querySelector('#subjects_table tbody'); tbody.innerHTML = '';
-  subjects.forEach(s => {
-    const perClass = Object.entries(s.per_class_weekly_hours || {}).map(([k,v]) => `${k}:${v}`).join(', ');
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${s.id}</td><td>${s.name}</td><td>${perClass}</td>
-      <td><button class="small" onclick="openEditSubject('${s.id}')">Szerkesztés</button>
-      <button class="small" onclick="deleteSubject('${s.id}')">Törlés</button></td>`;
-    tbody.appendChild(tr);
+  const tbody = document.querySelector('#subjects_table tbody'); tbody.innerHTML='';
+  subjects.forEach(s=>{
+    const perClass = Object.entries(s.per_class_weekly_hours||{}).map(([k,v])=>`${k}:${v}`).join(', ');
+    const tr=document.createElement('tr'); tr.innerHTML = `<td>${s.id}</td><td>${s.name}</td><td>${perClass}</td><td><button class="small btn" onclick="openEditSubject('${s.id}')">Szerkesztés</button><button class="small btn" onclick="deleteSubject('${s.id}')">Törlés</button></td>`; tbody.appendChild(tr);
   });
 
-  const tsc = document.getElementById('teacher_subjects_container'); tsc.innerHTML = '';
-  subjects.forEach(s => {
-    const d = document.createElement('label');
-    d.innerHTML = `<input type="checkbox" value="${s.id}"> ${s.name}`;
-    tsc.appendChild(d);
-  });
+  const tsc = document.getElementById('teacher_subjects_container'); tsc.innerHTML='';
+  subjects.forEach(s=>{ const d=document.createElement('label'); d.innerHTML = `<input type="checkbox" value="${s.id}"> ${s.name}`; tsc.appendChild(d); });
+
+  // edit modal subjects container
+  const etc = document.getElementById('edit_teacher_subjects'); if(etc){ etc.innerHTML=''; subjects.forEach(s=>{ const id='edit_teach_sub_'+s.id; const d=document.createElement('label'); d.innerHTML=`<input type="checkbox" id="${id}" value="${s.id}"> ${s.name}`; etc.appendChild(d); }); }
 }
 
 function renderTeachers(teachers){
-  const ul = document.getElementById('teacher_list'); ul.innerHTML = '';
-  teachers.forEach(t => {
-    const li = document.createElement('li');
-    li.innerHTML = `<strong>${t.id}</strong> — ${t.name} — heti: ${t.weekly_required_hours || 0} — tantárgyak: ${t.teaches_subjects.join(', ')} — fix: ${t.fixed_classes.join(', ')}
-      <button class="small" onclick="openEditTeacher('${t.id}')">Szerkesztés</button>
-      <button class="small" onclick="deleteTeacher('${t.id}')">Törlés</button>`;
-    ul.appendChild(li);
-  });
+  const ul = document.getElementById('teacher_list'); ul.innerHTML='';
+  teachers.forEach(t=>{ const li=document.createElement('li'); li.innerHTML = `<strong>${t.id}</strong> — ${t.name} — heti: ${t.weekly_required_hours||0} — tantárgyak: ${t.teaches_subjects.join(', ')} — fix: ${t.fixed_classes.join(', ')} <button class="small btn" onclick="openEditTeacher('${t.id}')">Szerkesztés</button><button class="small btn" onclick="deleteTeacher('${t.id}')">Törlés</button>`; ul.appendChild(li); });
 }
 
-/* ---------- validation logic ---------- */
+/* ---------- Validation logic (show errors only if touched or on submit) ---------- */
 
-function validateClassInput(){
+function setVisibility(el, cls, visible){
+  if(visible) el.classList.add('visible'); else el.classList.remove('visible');
+}
+
+function markInvalidInput(dom, invalid){
+  if(invalid) dom.classList.add('invalid'); else dom.classList.remove('invalid');
+}
+
+function validateClassInput(showImmediately=false){
   const inp = document.getElementById('class_id_input');
+  const note = document.getElementById('class_note');
   const err = document.getElementById('class_error');
-  const hint = document.getElementById('class_hint');
+  note.textContent = '';
   err.textContent = '';
-  hint.textContent = '';
+  // predicted name (non-shifting)
   const v = inp.value.trim();
-  if(!v) { err.textContent = 'Adj meg egy azonosítót!'; toggleDisabled('add_class_btn', true); return false; }
-  // simple format: should contain at least one digit and one letter
-  if(!(/[0-9]/.test(v) && /[A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű]/.test(v))){
-    hint.textContent = 'Ajánlott formátum: szám és betű (pl. 8A vagy 10B). A név automatikusan: 8.a';
+  if(v){
+    const number = v.replace(/[^0-9]/g,'')||v;
+    const letter = v.replace(/[^A-Za-z\u00C0-\u017F]/g,'').toLowerCase()||'';
+    note.textContent = (number && letter) ? `${number}.${letter}` : number||letter||'';
+    setVisibility(note, 'note', true);
+  } else {
+    setVisibility(note, 'note', false);
   }
-  // duplicate id check
-  if(currentData && currentData.classes.some(c => c.id.toLowerCase() === v.toLowerCase())){
-    err.textContent = 'Ezzel az azonosítóval már létezik osztály.';
-    toggleDisabled('add_class_btn', true);
-    return false;
-  }
-  toggleDisabled('add_class_btn', false);
-  return true;
+  // invalid checks
+  let invalid=false;
+  if(!v){ invalid=true; if(showImmediately||touched.class_id_input) err.textContent='Adj meg egy azonosítót!'; }
+  else if(currentData && currentData.classes.some(c=>c.id.toLowerCase()===v.toLowerCase())){ invalid=true; if(showImmediately||touched.class_id_input) err.textContent='Ezzel az azonosítóval már létezik osztály.'; }
+  // mark visual
+  markInvalidInput(inp, invalid && (showImmediately||touched.class_id_input));
+  setVisibility(err, 'error', Boolean(err.textContent));
+  toggleDisabled('add_class_btn', invalid);
+  return !invalid;
 }
 
 function predictSubjectIdFromName(name){
   const base = normalizeLocal(name).slice(0,4) || 's';
-  // if base exists, find next available
-  if(currentData){
-    const ids = currentData.subjects.map(s => s.id);
-    if(!ids.includes(base)) return base;
-    let i=2; while(ids.includes(base+i)) i++;
-    return base+i;
-  }
-  return base;
+  if(!currentData) return base;
+  const ids = currentData.subjects.map(s=>s.id);
+  if(!ids.includes(base)) return base;
+  let i=2; while(ids.includes(base+i)) i++;
+  return base+i;
 }
 
-function validateSubjectInput(){
+function validateSubjectInput(showImmediately=false){
   const name = document.getElementById('subject_name_input').value.trim();
-  const err = document.getElementById('subject_error');
   const gen = document.getElementById('subject_generated_id');
-  err.textContent = ''; gen.textContent = '';
-  if(!name){ err.textContent = 'Adj meg tantárgynevet!'; toggleDisabled('add_subject_btn', true); return false; }
-  const predicted = predictSubjectIdFromName(name);
-  gen.textContent = `Javasolt azonosító: ${predicted}`;
-  // highlight duplicate base (if predicted ends with number because of duplicate)
-  if(predicted.match(/\d$/)){
-    gen.textContent += ' (eredeti rövid azonosító foglalt — szám kerül a végére)';
-  }
-  // validate per-class hours
+  const err = document.getElementById('subject_error');
+  gen.textContent=''; err.textContent='';
+  if(name){
+    const predicted = predictSubjectIdFromName(name);
+    gen.textContent = `Javasolt azonosító: ${predicted}${predicted.match(/\d$/)?' (alap foglalt)':''}`;
+    setVisibility(gen, 'note', true);
+  } else setVisibility(gen, 'note', false);
+
+  // per-class hours validation
   const inputs = document.querySelectorAll('.subject-hours-input');
+  let invalid=false;
   for(const i of inputs){
     const v = i.value;
-    if(v === '' || isNaN(Number(v)) || Number(v) < 0 || !Number.isInteger(Number(v))){
-      err.textContent = 'Óraszámoknak nemnegatív egész számnak kell lenniük.';
-      toggleDisabled('add_subject_btn', true);
-      return false;
-    }
+    if(v==='' || isNaN(Number(v)) || Number(v)<0 || !Number.isInteger(Number(v))){ invalid=true; if(showImmediately) err.textContent='Óraszámoknak nemnegatív egész számnak kell lenniük.'; }
   }
-  toggleDisabled('add_subject_btn', false);
-  return true;
+  if(!name){ invalid=true; if(showImmediately||touched.subject_name_input) err.textContent = err.textContent || 'Adj meg tantárgynevet!'; }
+  markInvalidInput(document.getElementById('subject_name_input'), invalid && (showImmediately||touched.subject_name_input));
+  setVisibility(err, 'error', Boolean(err.textContent));
+  toggleDisabled('add_subject_btn', invalid);
+  return !invalid;
 }
 
 function predictTeacherIdFromName(name){
   if(!name) return '';
-  const parts = name.trim().split(/\s+/);
-  let base = parts.map(p => p[0] ? p[0].toUpperCase() : '').join('');
-  if(!base) base = 'T';
-  if(currentData){
-    const ids = currentData.teachers.map(t => t.id);
-    if(!ids.includes(base)) return base;
-    let i=2; while(ids.includes(base+i)) i++;
-    return base+i;
-  }
-  return base;
+  const parts=name.trim().split(/\s+/);
+  let base = parts.map(p=>p[0]?p[0].toUpperCase():'').join('')||'T';
+  if(!currentData) return base;
+  const ids = currentData.teachers.map(t=>t.id);
+  if(!ids.includes(base)) return base;
+  let i=2; while(ids.includes(base+i)) i++;
+  return base+i;
 }
 
-function validateTeacherInput(){
+function validateTeacherInput(showImmediately=false){
   const name = document.getElementById('teacher_name_input').value.trim();
-  const err = document.getElementById('teacher_error');
   const gen = document.getElementById('teacher_generated_id');
-  err.textContent = ''; gen.textContent = '';
-  if(!name){ err.textContent = 'Adj meg tanár nevet!'; toggleDisabled('add_teacher_btn', true); return false; }
-  const predicted = predictTeacherIdFromName(name);
-  gen.textContent = `Javasolt azonosító: ${predicted}`;
+  const err = document.getElementById('teacher_error');
+  gen.textContent=''; err.textContent='';
+  if(name){
+    gen.textContent = `Javasolt azonosító: ${predictTeacherIdFromName(name)}`;
+    setVisibility(gen, 'note', true);
+  } else setVisibility(gen, 'note', false);
+
   const weekly = document.getElementById('teacher_weekly_input').value;
-  if(weekly === '' || isNaN(Number(weekly)) || Number(weekly) < 0 || !Number.isInteger(Number(weekly))){
-    err.textContent = 'Heti óraszám legyen nemnegatív egész.';
-    toggleDisabled('add_teacher_btn', true); return false;
-  }
-  // optional: warn if no subject selected
-  const subjChecks = document.querySelectorAll('#teacher_subjects_container input[type=checkbox]');
-  let anySub=false; subjChecks.forEach(cb => { if(cb.checked) anySub=true; });
-  if(!anySub){
-    // don't block, just warn
-    gen.textContent += ' — figyelem: nincs tantárgy kiválasztva.';
-  }
-  toggleDisabled('add_teacher_btn', false);
-  return true;
+  let invalid=false;
+  if(weekly==='' || isNaN(Number(weekly)) || Number(weekly)<0 || !Number.isInteger(Number(weekly))){ invalid=true; if(showImmediately||touched.teacher_weekly_input) err.textContent='Heti óraszám legyen nemnegatív egész.'; }
+  if(!name){ invalid=true; if(showImmediately||touched.teacher_name_input) err.textContent = err.textContent || 'Adj meg tanár nevet!'; }
+
+  markInvalidInput(document.getElementById('teacher_name_input'), invalid && (showImmediately||touched.teacher_name_input));
+  markInvalidInput(document.getElementById('teacher_weekly_input'), invalid && (showImmediately||touched.teacher_weekly_input));
+  setVisibility(err, 'error', Boolean(err.textContent));
+  toggleDisabled('add_teacher_btn', invalid);
+  return !invalid;
 }
 
-/* helper to enable/disable buttons */
+/* ---------- helper to enable/disable ---------- */
 function toggleDisabled(id, disabled){
-  const b = document.getElementById(id);
+  const b=document.getElementById(id);
   if(!b) return;
-  if(disabled){ b.classList.add('disabled'); b.setAttribute('aria-disabled','true'); }
-  else { b.classList.remove('disabled'); b.removeAttribute('aria-disabled'); }
+  if(disabled){ b.classList.add('disabled'); b.setAttribute('aria-disabled','true'); } else { b.classList.remove('disabled'); b.removeAttribute('aria-disabled'); }
 }
 
-/* ---------- wire up events ---------- */
+/* ---------- events ---------- */
+document.getElementById('class_id_input').addEventListener('input', ()=> { touched.class_id_input = true; validateClassInput(); });
+document.getElementById('subject_name_input').addEventListener('input', ()=> { touched.subject_name_input = true; validateSubjectInput(); });
+document.getElementById('teacher_name_input').addEventListener('input', ()=> { touched.teacher_name_input = true; validateTeacherInput(); });
+document.getElementById('teacher_weekly_input').addEventListener('input', ()=> { touched.teacher_weekly_input = true; validateTeacherInput(); });
+
+// delegate for subject-hours inputs to validate on change
+document.addEventListener('input', (e)=>{ if(e.target && e.target.classList && e.target.classList.contains('subject-hours-input')) { validateSubjectInput(); } });
+
+// add buttons
+document.getElementById('add_class_btn').addEventListener('click', async ()=>{
+  if(!validateClassInput(true)) return;
+  const val=document.getElementById('class_id_input').value.trim();
+  const resp=await fetch('/add_class',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({class_id:val})});
+  const j=await resp.json(); if(!j.success){ document.getElementById('class_error').textContent=j.error||'Hiba'; setVisibility(document.getElementById('class_error'),'error',true); return;}
+  document.getElementById('class_id_input').value=''; touched.class_id_input=false; await refreshAll(); showToast('Osztály hozzáadva');
+});
+
+document.getElementById('add_subject_btn').addEventListener('click', async ()=>{
+  if(!validateSubjectInput(true)) return;
+  const name=document.getElementById('subject_name_input').value.trim();
+  const inputs=document.querySelectorAll('.subject-hours-input'); const per_class={};
+  inputs.forEach(i=> per_class[i.dataset.classid] = parseInt(i.value||0,10));
+  const resp=await fetch('/add_subject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject_name:name, per_class_weekly_hours: per_class})});
+  const j=await resp.json(); if(!j.success){ document.getElementById('subject_error').textContent=j.error||'Hiba'; setVisibility(document.getElementById('subject_error'),'error',true); return;}
+  document.getElementById('subject_name_input').value=''; touched.subject_name_input=false; await refreshAll(); showToast('Tantárgy hozzáadva');
+});
+
+document.getElementById('add_teacher_btn').addEventListener('click', async ()=>{
+  if(!validateTeacherInput(true)) return;
+  const name=document.getElementById('teacher_name_input').value.trim();
+  const weekly=document.getElementById('teacher_weekly_input').value;
+  const subjChecks=document.querySelectorAll('#teacher_subjects_container input[type=checkbox]'); const teaches=[]; subjChecks.forEach(cb=>{ if(cb.checked) teaches.push(cb.value); });
+  const classChecks=document.querySelectorAll('#teacher_classes_container input[type=checkbox]'); const fixed=[]; classChecks.forEach(cb=>{ if(cb.checked) fixed.push(cb.value); });
+  const resp=await fetch('/add_teacher',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({teacher_name:name, weekly_hours:weekly, teaches:teaches, fixed_classes: fixed})});
+  const j=await resp.json(); if(!j.success){ document.getElementById('teacher_error').textContent=j.error||'Hiba'; setVisibility(document.getElementById('teacher_error'),'error',true); return;}
+  document.getElementById('teacher_name_input').value=''; document.getElementById('teacher_weekly_input').value='18';
+  touched.teacher_name_input=false; touched.teacher_weekly_input=false;
+  await refreshAll(); showToast('Tanár hozzáadva');
+});
+
+/* delete/edit functions reuse your existing ones — assume they remain in the page */
+/* For brevity we won't duplicate them here; they should continue to call /update_..., /delete_... endpoints as before. */
+
+/* ---------- Info modal handling ---------- */
+function openInfo(which){
+  const title = { classes: 'Osztályok — segédlet', subjects: 'Tantárgyak — segédlet', teachers: 'Tanárok — segédlet' }[which] || 'Segítség';
+  let text = '';
+  if(which==='classes'){
+    text = '<p>Osztály azonosító: pl. <strong>8A</strong>. A rendszer automatikusan létrehoz egy megjelenítendő nevet (pl. <em>8.a</em>).</p><p>Adj meg egyedi azonosítót — ne legyen duplikált.</p>';
+  } else if(which==='subjects'){
+    text = '<p>Csak a tantárgy nevét írd be (pl. <strong>Matematika</strong>), a rövid azonosítót a rendszer javasolja (első 4 normalizált betű).</p><p>A táblázat alatt osztályonként add meg a heti óraszámot.</p>';
+  } else if(which==='teachers'){
+    text = '<p>Tanár neve: pl. <strong>Kovács Anna</strong>. A rendszer javasol egy azonosítót a kezdőbetűkből (pl. <em>KA</em>).</p><p>Adj meg heti óraszámot és pipáld ki a tantárgyakat, amelyeket tart, valamint a fix osztályokat, ha szükséges.</p>';
+  } else text = '<p>Általános segítség.</p>';
+  document.getElementById('info_title').textContent = title;
+  document.getElementById('info_text').innerHTML = text;
+  openModal('modal_info');
+}
+function openModal(id){ document.getElementById(id).style.display='flex'; document.getElementById(id).setAttribute('aria-hidden','false'); }
+function closeModal(id){ document.getElementById(id).style.display='none'; document.getElementById(id).setAttribute('aria-hidden','true'); }
+
+/* ---------- refresh on load ---------- */
 async function refreshAll(){
   const data = await fetchData();
   renderClasses(data.classes);
   renderSubjects(data.subjects, data.classes);
   renderTeachers(data.teachers);
-  // initial validation state
-  validateClassInput(); validateSubjectInput(); validateTeacherInput();
+  // initialize visibility states
+  validateClassInput(false);
+  validateSubjectInput(false);
+  validateTeacherInput(false);
 }
 
-// class input events
-document.getElementById('class_id_input').addEventListener('input', ()=> validateClassInput());
-document.getElementById('add_class_btn').addEventListener('click', async ()=>{
-  if(!validateClassInput()) return;
-  const val = document.getElementById('class_id_input').value.trim();
-  const resp = await fetch('/add_class', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({class_id: val})});
-  const j = await resp.json();
-  if(!j.success){ document.getElementById('class_error').textContent = j.error || 'Hiba'; return; }
-  document.getElementById('class_id_input').value='';
-  await refreshAll();
-  showToast('Osztály hozzáadva');
-});
-
-// subject events: validate on name input and on hours inputs (delegated)
-document.getElementById('subject_name_input').addEventListener('input', ()=> validateSubjectInput());
-document.addEventListener('input', (e)=>{
-  if(e.target && e.target.classList && e.target.classList.contains('subject-hours-input')){
-    validateSubjectInput();
-  }
-});
-document.getElementById('add_subject_btn').addEventListener('click', async ()=>{
-  if(!validateSubjectInput()) return;
-  const name = document.getElementById('subject_name_input').value.trim();
-  const inputs = document.querySelectorAll('.subject-hours-input');
-  const per_class = {};
-  inputs.forEach(i=> per_class[i.dataset.classid] = parseInt(i.value||0, 10));
-  const resp = await fetch('/add_subject', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({subject_name:name, per_class_weekly_hours: per_class})});
-  const j = await resp.json();
-  if(!j.success){ document.getElementById('subject_error').textContent = j.error || 'Hiba'; return; }
-  document.getElementById('subject_name_input').value='';
-  await refreshAll();
-  showToast('Tantárgy hozzáadva');
-});
-
-// teacher events
-document.getElementById('teacher_name_input').addEventListener('input', ()=> validateTeacherInput());
-document.getElementById('teacher_weekly_input').addEventListener('input', ()=> validateTeacherInput());
-document.addEventListener('change', (e)=>{
-  if(e.target && e.target.closest && e.target.closest('#teacher_subjects_container')){
-    validateTeacherInput();
-  }
-});
-document.getElementById('add_teacher_btn').addEventListener('click', async ()=>{
-  if(!validateTeacherInput()) return;
-  const name = document.getElementById('teacher_name_input').value.trim();
-  const weekly = document.getElementById('teacher_weekly_input').value;
-  const subjChecks = document.querySelectorAll('#teacher_subjects_container input[type=checkbox]');
-  const teaches = []; subjChecks.forEach(cb => { if(cb.checked) teaches.push(cb.value); });
-  const classChecks = document.querySelectorAll('#teacher_classes_container input[type=checkbox]');
-  const fixed = []; classChecks.forEach(cb => { if(cb.checked) fixed.push(cb.value); });
-  const resp = await fetch('/add_teacher', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({teacher_name:name, weekly_hours:weekly, teaches:teaches, fixed_classes: fixed})});
-  const j = await resp.json();
-  if(!j.success){ document.getElementById('teacher_error').textContent = j.error || 'Hiba'; return; }
-  document.getElementById('teacher_name_input').value=''; document.getElementById('teacher_weekly_input').value='18';
-  await refreshAll();
-  showToast('Tanár hozzáadva');
-});
-
-/* inline validate also when page loads */
+/* run */
 refreshAll();
 
 </script>
