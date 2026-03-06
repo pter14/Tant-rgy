@@ -1,61 +1,220 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>Órarend Segédlet</title>
+  <meta charset="utf-8">
+  <title>Órarend segédlet</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; }
+    section { margin-bottom: 24px; border: 1px solid #ddd; padding: 12px; border-radius: 6px;}
+    label { display:block; margin:6px 0 2px; }
+    .row { display:flex; gap:12px; align-items:center; }
+    .error { color: #b00; }
+    ul { margin:6px 0 0; padding-left: 20px; }
+    table { border-collapse: collapse; width:100%; }
+    table td, table th { border: 1px solid #ccc; padding:6px; }
+  </style>
 </head>
 <body>
+  <h1>Órarend segédlet — Adatbevitel</h1>
 
-<h2>Osztály hozzáadása</h2>
-<form action="/add_class" method="post">
-    Azonosító (pl. 8A): <input name="class_id">
-    <button type="submit">Hozzáadás</button>
-</form>
+  <section id="classes-section">
+    <h2>Osztályok</h2>
+    <div class="row">
+      <input id="class_id_input" placeholder="Pl. 8A">
+      <button id="add_class_btn">Hozzáadás</button>
+    </div>
+    <div id="class_error" class="error"></div>
+    <h3>Jelenlegi osztályok:</h3>
+    <ul id="class_list"></ul>
+  </section>
 
-<h3>Jelenlegi osztályok:</h3>
-<ul>
-{% for c in data.classes %}
-<li>{{c.id}} → {{c.name}}</li>
-{% endfor %}
-</ul>
+  <section id="subjects-section">
+    <h2>Tantárgy hozzáadása</h2>
+    <label>Tantárgy neve</label>
+    <input id="subject_name_input" placeholder="Pl. Matematika">
+    <div id="subject_hours_container"></div>
+    <div id="subject_error" class="error"></div>
+    <button id="add_subject_btn">Tantárgy hozzáadása</button>
 
-<hr>
+    <h3>Jelenlegi tantárgyak</h3>
+    <table id="subjects_table"><thead><tr><th>ID</th><th>Név</th><th>Óraszám (osztályok)</th></tr></thead><tbody></tbody></table>
+  </section>
 
-<h2>Tantárgy hozzáadása</h2>
-<form action="/add_subject" method="post">
-    Tantárgy neve: <input name="subject_name"><br><br>
-    {% for c in data.classes %}
-        {{c.name}} óraszám: <input type="number" name="hours_{{c.id}}" value="0"><br>
-    {% endfor %}
-    <button type="submit">Hozzáadás</button>
-</form>
+  <section id="teachers-section">
+    <h2>Tanár hozzáadása</h2>
+    <label>Név</label>
+    <input id="teacher_name_input" placeholder="Kovács Anna">
+    <label>Heti óraszám</label>
+    <input id="teacher_weekly_input" type="number" min="0" value="18">
+    <div>
+      <strong>Tantárgyak:</strong>
+      <div id="teacher_subjects_container"></div>
+    </div>
+    <div>
+      <strong>Fix osztályok:</strong>
+      <div id="teacher_classes_container"></div>
+    </div>
+    <div id="teacher_error" class="error"></div>
+    <button id="add_teacher_btn">Tanár hozzáadása</button>
 
-<hr>
+    <h3>Jelenlegi tanárok</h3>
+    <ul id="teacher_list"></ul>
+  </section>
 
-<h2>Tanár hozzáadása</h2>
-<form action="/add_teacher" method="post">
-    Név: <input name="teacher_name"><br>
-    Heti óraszám: <input type="number" name="weekly_hours"><br><br>
+  <section>
+    <h2>Export / JSON</h2>
+    <a href="/export" target="_blank">JSON megtekintése</a>
+  </section>
 
-    <strong>Tantárgyak:</strong><br>
-    {% for s in data.subjects %}
-        <input type="checkbox" name="subjects" value="{{s.id}}"> {{s.name}}<br>
-    {% endfor %}
+<script>
+async function fetchData(){
+  const resp = await fetch('/data');
+  const j = await resp.json();
+  return j.data;
+}
 
-    <br>
-    <strong>Fix osztályok:</strong><br>
-    {% for c in data.classes %}
-        <input type="checkbox" name="classes" value="{{c.id}}"> {{c.name}}<br>
-    {% endfor %}
+function renderClasses(classes){
+  const ul = document.getElementById('class_list');
+  ul.innerHTML = '';
+  classes.forEach(c => {
+    const li = document.createElement('li');
+    li.textContent = `${c.id} → ${c.name}`;
+    ul.appendChild(li);
+  });
+  // render subject-hours inputs area
+  const container = document.getElementById('subject_hours_container');
+  container.innerHTML = '';
+  if(classes.length === 0){
+    container.textContent = 'Először adj meg osztályt.';
+  } else {
+    classes.forEach(c => {
+      const div = document.createElement('div');
+      div.innerHTML = `<label>${c.name} óraszám:</label><input type="number" min="0" value="0" data-classid="${c.id}" class="subject-hours-input">`;
+      container.appendChild(div);
+    });
+  }
 
-    <br>
-    <button type="submit">Hozzáadás</button>
-</form>
+  // teacher classes checkboxes
+  const tc = document.getElementById('teacher_classes_container');
+  tc.innerHTML = '';
+  classes.forEach(c => {
+    const id = `teach_class_${c.id}`;
+    const d = document.createElement('div');
+    d.innerHTML = `<label><input type="checkbox" id="${id}" value="${c.id}"> ${c.name}</label>`;
+    tc.appendChild(d);
+  });
+}
 
-<hr>
+function renderSubjects(subjects, classes){
+  const tbody = document.querySelector('#subjects_table tbody');
+  tbody.innerHTML = '';
+  subjects.forEach(s => {
+    const tr = document.createElement('tr');
+    const perClass = Object.entries(s.per_class_weekly_hours || {}).map(([k,v]) => `${k}:${v}`).join(', ');
+    tr.innerHTML = `<td>${s.id}</td><td>${s.name}</td><td>${perClass}</td>`;
+    tbody.appendChild(tr);
+  });
 
-<h2>Export</h2>
-<a href="/export" target="_blank">JSON megtekintése</a>
+  // teacher subjects checkboxes
+  const tsc = document.getElementById('teacher_subjects_container');
+  tsc.innerHTML = '';
+  subjects.forEach(s => {
+    const id = `teach_sub_${s.id}`;
+    const d = document.createElement('div');
+    d.innerHTML = `<label><input type="checkbox" id="${id}" value="${s.id}"> ${s.name}</label>`;
+    tsc.appendChild(d);
+  });
+}
 
+function renderTeachers(teachers){
+  const ul = document.getElementById('teacher_list');
+  ul.innerHTML = '';
+  teachers.forEach(t => {
+    const li = document.createElement('li');
+    li.textContent = `${t.id} — ${t.name} — heti: ${t.weekly_required_hours} — tantárgyak: ${t.teaches_subjects.join(', ')} — fix: ${t.fixed_classes.join(', ')}`;
+    ul.appendChild(li);
+  });
+}
+
+async function refreshAll(){
+  const data = await fetchData();
+  renderClasses(data.classes);
+  renderSubjects(data.subjects, data.classes);
+  renderTeachers(data.teachers);
+}
+
+document.getElementById('add_class_btn').addEventListener('click', async ()=>{
+  const inp = document.getElementById('class_id_input');
+  const err = document.getElementById('class_error');
+  err.textContent = '';
+  const val = inp.value.trim();
+  if(!val){ err.textContent = 'Adj meg egy azonosítót!'; return; }
+  const resp = await fetch('/add_class', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({class_id: val})
+  });
+  const j = await resp.json();
+  if(!j.success){ err.textContent = j.error || 'Hiba'; return; }
+  inp.value = '';
+  await refreshAll();
+});
+
+document.getElementById('add_subject_btn').addEventListener('click', async ()=>{
+  const name = document.getElementById('subject_name_input').value.trim();
+  const err = document.getElementById('subject_error');
+  err.textContent = '';
+  if(!name){ err.textContent = 'Adj meg tantárgynevet!'; return; }
+
+  // collect hours
+  const inputs = document.querySelectorAll('.subject-hours-input');
+  const per_class = {};
+  inputs.forEach(i=>{
+    per_class[i.dataset.classid] = parseInt(i.value||0, 10);
+  });
+
+  const resp = await fetch('/add_subject', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({subject_name: name, per_class_weekly_hours: per_class})
+  });
+  const j = await resp.json();
+  if(!j.success){ err.textContent = j.error || 'Hiba'; return; }
+  document.getElementById('subject_name_input').value = '';
+  await refreshAll();
+});
+
+document.getElementById('add_teacher_btn').addEventListener('click', async ()=>{
+  const name = document.getElementById('teacher_name_input').value.trim();
+  const weekly = document.getElementById('teacher_weekly_input').value;
+  const err = document.getElementById('teacher_error');
+  err.textContent = '';
+  if(!name){ err.textContent = 'Adj meg tanár nevet!'; return; }
+
+  // collect selected subjects
+  const subjChecks = document.querySelectorAll('#teacher_subjects_container input[type=checkbox]');
+  const teaches = [];
+  subjChecks.forEach(cb => { if(cb.checked) teaches.push(cb.value); });
+
+  // collect selected classes
+  const classChecks = document.querySelectorAll('#teacher_classes_container input[type=checkbox]');
+  const fixed = [];
+  classChecks.forEach(cb => { if(cb.checked) fixed.push(cb.value); });
+
+  const resp = await fetch('/add_teacher', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({teacher_name: name, weekly_hours: weekly, teaches: teaches, fixed_classes: fixed})
+  });
+  const j = await resp.json();
+  if(!j.success){ err.textContent = j.error || 'Hiba'; return; }
+  document.getElementById('teacher_name_input').value = '';
+  document.getElementById('teacher_weekly_input').value = '18';
+  await refreshAll();
+});
+
+// initial load
+refreshAll();
+</script>
 </body>
 </html>
