@@ -2,10 +2,11 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Órarend segédlet — fixed assignments</title>
+  <title>Órarend segédlet — teljes felület</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 16px; background:#f7f7f8; }
     section { margin-bottom: 18px; background:#fff; border: 1px solid #e3e3e6; padding: 12px; border-radius: 8px;}
+    h1,h2 { margin:8px 0; }
     label { display:block; margin:6px 0 2px; font-weight:600; }
     .row { display:flex; gap:12px; align-items:center; margin-bottom:8px;}
     .btn { padding:8px 12px; border-radius:6px; border:1px solid #bbb; background:#fff; cursor:pointer; }
@@ -14,22 +15,55 @@
     input[type="text"], input[type="number"] { padding:8px; border:1px solid #ccc; border-radius:6px; min-width:160px; }
     .checkbox-grid { display:flex; flex-wrap:wrap; gap:8px; }
     .checkbox-grid label { display:flex; gap:6px; align-items:center; background:#f2f6ff; padding:6px 8px; border-radius:6px; border:1px solid #e1e8ff; }
-    table { border-collapse: collapse; width:100%; background:white; }
+    table { border-collapse: collapse; width:100%; background:white; margin-top:8px; }
     table td, table th { border: 1px solid #e0e0e0; padding:8px; }
     .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.35); display:none; align-items:center; justify-content:center; z-index:2000; }
-    .modal { background:white; border-radius:8px; width:720px; max-width:95%; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
+    .modal { background:white; border-radius:8px; width:760px; max-width:96%; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,0.2); }
     .close-x { float:right; cursor:pointer; color:#888; font-weight:bold; }
     .fixed-subgrid { margin-left:12px; margin-top:6px; margin-bottom:8px; }
-    .fixed-subgrid h4 { margin:6px 0; font-weight:600; }
     .muted { color:#666; font-size:0.9rem; }
     .note { font-size:0.9rem; color:#444; margin-top:6px; }
+    .inline-area { min-height:22px; margin-top:6px; }
+    .error { color:#b00; font-size:0.95rem; }
+    .disabled { opacity:0.55; pointer-events:none; }
+    input.invalid { border-color:#b00; box-shadow: 0 0 0 3px rgba(176,0,0,0.05); }
   </style>
 </head>
 <body>
-  <h1>Órarend segédlet — Tanár fix hozzárendelések</h1>
+  <h1>Órarend segédlet — Adatbevitel</h1>
 
+  <!-- CLASSES -->
+  <section id="classes-section">
+    <h2>Osztályok</h2>
+    <div class="row">
+      <input id="class_id_input" placeholder="Pl. 8A" type="text">
+      <button id="add_class_btn" class="btn btn-primary">Hozzáadás</button>
+      <span class="muted">Azonosító alapján automatikus név (pl. 8A → 8.a)</span>
+    </div>
+    <div id="class_inline" class="inline-area"><div id="class_error" class="error"></div></div>
+    <h3>Jelenlegi osztályok:</h3>
+    <ul id="class_list"></ul>
+  </section>
+
+  <!-- SUBJECTS -->
+  <section id="subjects-section">
+    <h2>Tantárgyak</h2>
+    <label>Tantárgy neve</label>
+    <input id="subject_name_input" placeholder="Pl. Matematika" type="text">
+    <div id="subject_generated_id" class="note"></div>
+    <div id="subject_hours_container" style="margin-top:8px;"></div>
+    <div id="subject_inline" class="inline-area"><div id="subject_error" class="error"></div></div>
+    <div style="margin-top:8px;">
+      <button id="add_subject_btn" class="btn btn-primary">Tantárgy hozzáadása</button>
+    </div>
+
+    <h3 style="margin-top:12px;">Jelenlegi tantárgyak</h3>
+    <table id="subjects_table"><thead><tr><th>ID</th><th>Név</th><th>Óraszám (osztályok)</th><th>Művelet</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <!-- TEACHERS -->
   <section id="teachers-section">
-    <h2>Tanárok hozzáadása</h2>
+    <h2>Tanárok</h2>
     <label>Név</label>
     <input id="teacher_name_input" placeholder="Kovács Anna" type="text">
     <div class="row" style="margin-top:8px;">
@@ -37,16 +71,12 @@
         <label>Heti óraszám</label>
         <input id="teacher_weekly_input" type="number" min="0" value="18">
       </div>
-      <div style="margin-left:16px;">
-        <label>Választott tantárgyak</label>
+      <div style="margin-left:16px;" class="muted">
+        <label>Tantárgyak</label>
         <div id="teacher_subjects_container" class="checkbox-grid"></div>
       </div>
     </div>
-
-    <div style="margin-top:10px;">
-      <div class="note">Tantárgyanként megadhatod, hogy a tanár mely osztályoknál **fixen** tartja az adott tantárgyat (például: Matematika — 1A).</div>
-    </div>
-
+    <div class="note">Ha bepipálsz egy tantárgyat, alatta megjelentik az osztályokat, ahol fixként beállíthatod a tanárt az adott tárgyhoz.</div>
     <div id="teacher_fixed_container" style="margin-top:8px;"></div>
 
     <div style="margin-top:12px;">
@@ -58,61 +88,103 @@
   </section>
 
   <section>
-    <h2>Export</h2>
+    <h2>Export / JSON</h2>
     <a href="/export" target="_blank">JSON megtekintése</a> |
     <a href="/download" target="_blank">data.json letöltése</a>
   </section>
 
-  <!-- EDIT TEACHER MODAL -->
-  <div id="modal_teacher" class="modal-backdrop">
-    <div class="modal" role="dialog" aria-modal="true">
-      <span class="close-x" onclick="closeModal('modal_teacher')">✕</span>
-      <h3>Tanár szerkesztése</h3>
-      <div class="form-row">
-        <label>Azonosító (nem szerkeszthető)</label>
-        <input id="edit_teacher_id" disabled>
-      </div>
-      <div class="form-row">
-        <label>Név</label>
-        <input id="edit_teacher_name">
-      </div>
-      <div class="form-row">
-        <label>Heti óraszám</label>
-        <input id="edit_teacher_weekly" type="number" min="0">
-      </div>
-      <div class="form-row">
-        <label>Tantárgyak</label>
-        <div id="edit_teacher_subjects" class="checkbox-grid"></div>
-      </div>
-      <div class="form-row">
-        <label>Fix osztályok tantárgyanként</label>
-        <div id="edit_teacher_fixed_container"></div>
-      </div>
-      <div style="margin-top:10px;">
-        <button class="btn btn-primary" onclick="saveEditTeacher()">Mentés</button>
-        <button class="btn" onclick="closeModal('modal_teacher')">Mégse</button>
-      </div>
-    </div>
-  </div>
+  <!-- EDIT MODALS (class, subject, teacher) -->
+  <div id="modal_class" class="modal-backdrop"><div class="modal"><span class="close-x" onclick="closeModal('modal_class')">✕</span><h3>Osztály szerkesztése</h3>
+    <label>Azonosító (nem szerkeszthető)</label><input id="edit_class_id" disabled>
+    <label>Megjelenítendő név</label><input id="edit_class_name">
+    <div style="margin-top:8px;"><button class="btn btn-primary" onclick="saveEditClass()">Mentés</button><button class="btn" onclick="closeModal('modal_class')">Mégse</button></div>
+  </div></div>
+
+  <div id="modal_subject" class="modal-backdrop"><div class="modal"><span class="close-x" onclick="closeModal('modal_subject')">✕</span><h3>Tantárgy szerkesztése</h3>
+    <label>Azonosító (nem szerkeszthető)</label><input id="edit_subject_id" disabled>
+    <label>Megnevezés</label><input id="edit_subject_name">
+    <div id="edit_subject_hours_container" style="margin-top:8px;"></div>
+    <div style="margin-top:8px;"><button class="btn btn-primary" onclick="saveEditSubject()">Mentés</button><button class="btn" onclick="closeModal('modal_subject')">Mégse</button></div>
+  </div></div>
+
+  <div id="modal_teacher" class="modal-backdrop"><div class="modal"><span class="close-x" onclick="closeModal('modal_teacher')">✕</span><h3>Tanár szerkesztése</h3>
+    <label>Azonosító (nem szerkeszthető)</label><input id="edit_teacher_id" disabled>
+    <label>Név</label><input id="edit_teacher_name">
+    <label>Heti óraszám</label><input id="edit_teacher_weekly" type="number" min="0">
+    <label>Tantárgyak</label><div id="edit_teacher_subjects" class="checkbox-grid"></div>
+    <label>Fix osztályok tantárgyanként</label><div id="edit_teacher_fixed_container"></div>
+    <div style="margin-top:8px;"><button class="btn btn-primary" onclick="saveEditTeacher()">Mentés</button><button class="btn" onclick="closeModal('modal_teacher')">Mégse</button></div>
+  </div></div>
 
 <script>
 /* ---------- state ---------- */
 let currentData = null;
 
-/* ---------- fetch ---------- */
-async function fetchData(){
-  const resp = await fetch('/data');
-  const j = await resp.json();
-  currentData = j.data;
-  return j.data;
+/* ---------- helpers ---------- */
+function normalizeLocal(text){
+  try{ return text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,''); }
+  catch(e){ return text.toLowerCase().replace(/\s+/g,''); }
 }
 
+async function fetchData(){ const resp = await fetch('/data'); const j = await resp.json(); currentData = j.data; return j.data; }
+function showToast(msg, t=1400){ const el = document.getElementById('toast'); if(!el){ const d=document.createElement('div'); d.id='toast'; d.style.position='fixed'; d.style.right='20px'; d.style.bottom='20px'; d.style.background='#222'; d.style.color='#fff'; d.style.padding='8px 12px'; d.style.borderRadius='6px'; d.style.zIndex=4000; document.body.appendChild(d); } document.getElementById('toast').textContent=msg; document.getElementById('toast').style.display='block'; setTimeout(()=>document.getElementById('toast').style.display='none',t); }
+
 /* ---------- renderers ---------- */
+function renderClasses(classes){
+  const ul = document.getElementById('class_list'); ul.innerHTML='';
+  classes.forEach(c => {
+    const li = document.createElement('li');
+    li.innerHTML = `<strong>${c.id}</strong> → ${c.name} ${c.religion_choice ? '(' + c.religion_choice + ')' : ''} 
+      <button class="small btn" onclick="openEditClass('${c.id}')">Szerkesztés</button>
+      <button class="small btn" onclick="deleteClass('${c.id}')">Törlés</button>`;
+    ul.appendChild(li);
+  });
+
+  // update subject-hours input area
+  const container = document.getElementById('subject_hours_container'); container.innerHTML='';
+  if(classes.length===0){ container.textContent='Először adj meg osztályt.'; }
+  else{
+    classes.forEach(c=>{
+      const div=document.createElement('div');
+      div.innerHTML = `<label>${c.name} óraszám:</label><input type="number" min="0" value="0" data-classid="${c.id}" class="subject-hours-input">`;
+      container.appendChild(div);
+    });
+  }
+
+  // teacher fixed container (new adds): rebuild checkboxes for classes inside each subject subgrid when needed
+  // also update edit modal fixed containers if present
+  // (handled in other renderers)
+}
+
+function renderSubjects(subjects, classes){
+  const tbody = document.querySelector('#subjects_table tbody'); tbody.innerHTML='';
+  subjects.forEach(s=>{
+    const perClass = Object.entries(s.per_class_weekly_hours||{}).map(([k,v])=>`${k}:${v}`).join(', ');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.id}</td><td>${s.name}</td><td>${perClass}</td>
+      <td><button class="small btn" onclick="openEditSubject('${s.id}')">Szerkesztés</button>
+      <button class="small btn" onclick="deleteSubject('${s.id}')">Törlés</button></td>`;
+    tbody.appendChild(tr);
+  });
+
+  // teacher subjects checkboxes
+  const tsc = document.getElementById('teacher_subjects_container'); tsc.innerHTML='';
+  subjects.forEach(s=>{
+    const id = `add_teach_sub_${s.id}`;
+    const d = document.createElement('label');
+    d.innerHTML = `<input type="checkbox" id="${id}" value="${s.id}" onchange="onTeachSubjectToggle('${s.id}')"> ${s.name}`;
+    tsc.appendChild(d);
+  });
+
+  // edit modal subject checkboxes
+  const etc = document.getElementById('edit_teacher_subjects'); if(etc){ etc.innerHTML=''; subjects.forEach(s=>{ const id='edit_teach_sub_'+s.id; const d=document.createElement('label'); d.innerHTML=`<input type="checkbox" id="${id}" value="${s.id}" onchange="onEditTeachSubToggle('${s.id}')"> ${s.name}`; etc.appendChild(d); }); }
+}
+
 function renderTeachers(teachers){
   const ul = document.getElementById('teacher_list'); ul.innerHTML='';
   teachers.forEach(t=>{
+    const fixed = (t.fixed_assignments || []).map(f=>`${f.subject}@${f.class}`).join(', ');
     const li = document.createElement('li');
-    const fixed = (t.fixed_assignments || []).map(f => `${f.subject}@${f.class}`).join(', ');
     li.innerHTML = `<strong>${t.id}</strong> — ${t.name} — heti: ${t.weekly_required_hours || 0} — tantárgyak: ${t.teaches_subjects.join(', ')} — fix: ${fixed}
       <button class="small btn" onclick="openEditTeacher('${t.id}')">Szerkesztés</button>
       <button class="small btn" onclick="deleteTeacher('${t.id}')">Törlés</button>`;
@@ -120,220 +192,218 @@ function renderTeachers(teachers){
   });
 }
 
-/* populate subject checkboxes and hook fixed grid */
-function renderSubjectCheckboxes(){
-  const tsc = document.getElementById('teacher_subjects_container'); tsc.innerHTML='';
-  if(!currentData) return;
-  currentData.subjects.forEach(s=>{
-    const id = `add_teach_sub_${s.id}`;
-    const d = document.createElement('label');
-    d.innerHTML = `<input type="checkbox" id="${id}" value="${s.id}" onchange="onTeachSubjectToggle('${s.id}')"> ${s.name}`;
-    tsc.appendChild(d);
-  });
-}
+/* ---------- add handlers ---------- */
+/* CLASS */
+document.getElementById('add_class_btn').addEventListener('click', async ()=>{
+  const inp = document.getElementById('class_id_input');
+  const val = inp.value.trim();
+  if(!val){ alert('Adj meg egy azonosítót!'); return; }
+  const resp = await fetch('/add_class',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({class_id: val}) });
+  const j = await resp.json();
+  if(!j.success){ alert(j.error || 'Hiba'); return; }
+  inp.value=''; await refreshAll(); showToast('Osztály hozzáadva');
+});
 
-/* when a subject is toggled in add-form, show/hide the class checkboxes for fixed selection */
+/* SUBJECT */
+document.getElementById('add_subject_btn').addEventListener('click', async ()=>{
+  const name = document.getElementById('subject_name_input').value.trim();
+  if(!name){ alert('Adj meg tantárgynevet!'); return; }
+  const inputs = document.querySelectorAll('.subject-hours-input');
+  const per_class = {};
+  inputs.forEach(i => per_class[i.dataset.classid] = parseInt(i.value||0,10));
+  const resp = await fetch('/add_subject',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({subject_name:name, per_class_weekly_hours: per_class})});
+  const j = await resp.json();
+  if(!j.success){ alert(j.error || 'Hiba'); return; }
+  document.getElementById('subject_name_input').value=''; await refreshAll(); showToast('Tantárgy hozzáadva');
+});
+
+/* TEACHER add with fixed_assignments */
 function onTeachSubjectToggle(subjectId){
   const container = document.getElementById('teacher_fixed_container');
-  // ensure there's a subgrid element per subject
   let sub = document.getElementById('fixed_subgrid_'+subjectId);
   const checked = document.getElementById('add_teach_sub_'+subjectId).checked;
   if(checked && !sub){
-    sub = document.createElement('div');
-    sub.id = 'fixed_subgrid_'+subjectId;
-    sub.className = 'fixed-subgrid';
-    let inner = `<h4>Fix osztályok a(z) ${subjectId} tantárgyhoz (pipáld ki):</h4><div class="checkbox-grid">`;
-    currentData.classes.forEach(c=>{
-      inner += `<label><input type="checkbox" data-subject="${subjectId}" value="${c.id}"> ${c.name}</label>`;
-    });
-    inner += `</div>`;
-    sub.innerHTML = inner;
-    container.appendChild(sub);
+    sub = document.createElement('div'); sub.id = 'fixed_subgrid_'+subjectId; sub.className='fixed-subgrid';
+    let inner = `<h4>Fix osztályok a(z) ${subjectId} tantárgyhoz (pipáld):</h4><div class="checkbox-grid">`;
+    (currentData.classes||[]).forEach(c => inner += `<label><input type="checkbox" data-subject="${subjectId}" value="${c.id}"> ${c.name}</label>`);
+    inner += `</div>`; sub.innerHTML = inner; container.appendChild(sub);
   } else if(!checked && sub){
     sub.remove();
   }
 }
 
-/* collect fixed_assignments from add form */
 function collectFixedAssignmentsFromAddForm(){
   const fixes = [];
   const checks = document.querySelectorAll('#teacher_fixed_container input[type=checkbox]');
-  checks.forEach(cb=>{
-    if(cb.checked){
-      fixes.push({ subject: cb.dataset.subject, class: cb.value });
-    }
-  });
+  checks.forEach(cb => { if(cb.checked) fixes.push({ subject: cb.dataset.subject, class: cb.value }); });
   return fixes;
 }
 
-/* ---------- add teacher ---------- */
 document.getElementById('add_teacher_btn').addEventListener('click', async ()=>{
   const name = document.getElementById('teacher_name_input').value.trim();
   const weekly = document.getElementById('teacher_weekly_input').value || 0;
   if(!name){ alert('Adj meg tanár nevet!'); return; }
   const teaches = [];
-  currentData.subjects.forEach(s => {
-    const el = document.getElementById('add_teach_sub_'+s.id);
-    if(el && el.checked) teaches.push(s.id);
-  });
+  (currentData.subjects||[]).forEach(s => { const el = document.getElementById('add_teach_sub_'+s.id); if(el && el.checked) teaches.push(s.id); });
   const fixed_assignments = collectFixedAssignmentsFromAddForm();
-
-  // validate: each fixed assignment's subject must be in teaches
-  for(const fa of fixed_assignments){
-    if(!teaches.includes(fa.subject)){
-      alert(`Fix beosztás megadva tantárgyra (${fa.subject}), amit nem választottál ki tanítandó tantárgyként.`);
-      return;
-    }
-  }
-
-  const resp = await fetch('/add_teacher', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({teacher_name: name, weekly_hours: weekly, teaches: teaches, fixed_assignments: fixed_assignments})
-  });
+  // validate fixed assignments are for chosen subjects
+  for(const fa of fixed_assignments){ if(!teaches.includes(fa.subject)){ alert('Fix beosztás egy olyan tantárgyhoz készült, amit nem jelöltél be.'); return; } }
+  const resp = await fetch('/add_teacher',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({teacher_name:name, weekly_hours: weekly, teaches: teaches, fixed_assignments: fixed_assignments}) });
   const j = await resp.json();
   if(!j.success){ alert(j.error || 'Hiba'); return; }
   // clear form
-  document.getElementById('teacher_name_input').value='';
-  document.getElementById('teacher_weekly_input').value='18';
-  // uncheck subject boxes
-  currentData.subjects.forEach(s => { const el = document.getElementById('add_teach_sub_'+s.id); if(el) el.checked=false; });
-  document.getElementById('teacher_fixed_container').innerHTML='';
-  await refreshAll();
+  document.getElementById('teacher_name_input').value=''; document.getElementById('teacher_weekly_input').value='18';
+  (currentData.subjects||[]).forEach(s => { const el = document.getElementById('add_teach_sub_'+s.id); if(el) el.checked=false; });
+  document.getElementById('teacher_fixed_container').innerHTML=''; await refreshAll(); showToast('Tanár hozzáadva');
 });
 
-/* ---------- edit teacher modal logic ---------- */
+/* ---------- edit / delete functions ---------- */
+/* CLASS edit/delete */
+function openEditClass(id){
+  const c = currentData.classes.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('edit_class_id').value = c.id;
+  document.getElementById('edit_class_name').value = c.name;
+  openModal('modal_class');
+}
+async function saveEditClass(){
+  const id = document.getElementById('edit_class_id').value;
+  const newName = document.getElementById('edit_class_name').value.trim();
+  if(!newName){ alert('Üres név nem megengedett.'); return; }
+  const resp = await fetch('/update_class',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: id, new_name: newName})});
+  const j = await resp.json(); if(!j.success){ alert(j.error||'Hiba'); return; }
+  closeModal('modal_class'); await refreshAll(); showToast('Osztály mentve');
+}
+async function deleteClass(id){
+  if(!confirm('Biztos törlöd az osztályt?')) return;
+  const resp = await fetch('/delete_class',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:id})});
+  const j = await resp.json(); if(!j.success){ alert(j.error||'Hiba'); return; }
+  await refreshAll(); showToast('Osztály törölve');
+}
+
+/* SUBJECT edit/delete */
+function openEditSubject(id){
+  const s = currentData.subjects.find(x=>x.id===id);
+  if(!s) return;
+  document.getElementById('edit_subject_id').value = s.id;
+  document.getElementById('edit_subject_name').value = s.name;
+  // fill per-class inputs
+  const cont = document.getElementById('edit_subject_hours_container'); cont.innerHTML='';
+  (currentData.classes||[]).forEach(c=>{
+    const cur = s.per_class_weekly_hours && s.per_class_weekly_hours[c.id] ? s.per_class_weekly_hours[c.id] : 0;
+    const div = document.createElement('div'); div.innerHTML = `<label>${c.name}:</label><input type="number" min="0" data-classid="${c.id}" class="edit-subject-hours" value="${cur}">`; cont.appendChild(div);
+  });
+  openModal('modal_subject');
+}
+async function saveEditSubject(){
+  const id = document.getElementById('edit_subject_id').value;
+  const newName = document.getElementById('edit_subject_name').value.trim();
+  if(!newName){ alert('Üres név nem megengedett.'); return; }
+  const inputs = document.querySelectorAll('.edit-subject-hours'); const per_class={};
+  inputs.forEach(i => per_class[i.dataset.classid] = parseInt(i.value||0,10));
+  const resp = await fetch('/update_subject',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:id, new_name:newName, per_class_weekly_hours: per_class})});
+  const j = await resp.json(); if(!j.success){ alert(j.error||'Hiba'); return; }
+  closeModal('modal_subject'); await refreshAll(); showToast('Tantárgy mentve');
+}
+async function deleteSubject(id){
+  if(!confirm('Biztos törlöd a tantárgyat?')) return;
+  const resp = await fetch('/delete_subject',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:id})});
+  const j = await resp.json(); if(!j.success){ alert(j.error||'Hiba'); return; }
+  await refreshAll(); showToast('Tantárgy törölve');
+}
+
+/* TEACHER edit/delete */
 function openEditTeacher(id){
-  const t = currentData.teachers.find(x => x.id === id);
+  const t = currentData.teachers.find(x=>x.id===id);
   if(!t) return alert('Nem található a tanár.');
   document.getElementById('edit_teacher_id').value = t.id;
   document.getElementById('edit_teacher_name').value = t.name;
   document.getElementById('edit_teacher_weekly').value = t.weekly_required_hours || 0;
-
   // populate subject checkboxes
-  const cont = document.getElementById('edit_teacher_subjects');
-  cont.innerHTML = '';
-  currentData.subjects.forEach(s=>{
+  const cont = document.getElementById('edit_teacher_subjects'); cont.innerHTML='';
+  (currentData.subjects||[]).forEach(s=>{
     const id = 'edit_teach_sub_'+s.id;
-    const checked = (t.teaches_subjects || []).includes(s.id);
+    const checked = (t.teaches_subjects||[]).includes(s.id);
     const d = document.createElement('label');
     d.innerHTML = `<input type="checkbox" id="${id}" value="${s.id}" onchange="onEditTeachSubToggle('${s.id}')"> ${s.name}`;
     cont.appendChild(d);
-    // set checked after adding
-    setTimeout(()=>{ const el = document.getElementById(id); if(el) el.checked = checked; }, 0);
+    setTimeout(()=>{ const el=document.getElementById(id); if(el) el.checked=checked; },0);
   });
-
-  // build fixed container
   buildEditFixedContainer(t);
-
   openModal('modal_teacher');
 }
-
 function buildEditFixedContainer(teacher){
-  const container = document.getElementById('edit_teacher_fixed_container');
-  container.innerHTML = '';
-  // for each subject, create subgrid (but hide if not taught)
-  currentData.subjects.forEach(s=>{
-    const sub = document.createElement('div');
-    sub.id = 'edit_fixed_subgrid_'+s.id;
-    sub.className = 'fixed-subgrid';
+  const container = document.getElementById('edit_teacher_fixed_container'); container.innerHTML='';
+  (currentData.subjects||[]).forEach(s=>{
+    const sub = document.createElement('div'); sub.id = 'edit_fixed_subgrid_'+s.id; sub.className='fixed-subgrid';
     let inner = `<h4>${s.name} — fix osztályok:</h4><div class="checkbox-grid">`;
-    currentData.classes.forEach(c=>{
-      const faExists = (teacher.fixed_assignments || []).some(f => f.subject === s.id && f.class === c.id);
+    (currentData.classes||[]).forEach(c=>{
+      const faExists = (teacher.fixed_assignments||[]).some(f=>f.subject===s.id && f.class===c.id);
       inner += `<label><input type="checkbox" data-subject="${s.id}" value="${c.id}" ${faExists ? 'checked' : ''}> ${c.name}</label>`;
     });
-    inner += '</div>';
-    sub.innerHTML = inner;
-    container.appendChild(sub);
-    // hide the subgrid initially if teacher doesn't teach this subject
-    const teaches = (teacher.teaches_subjects || []).includes(s.id);
-    if(!teaches) sub.style.display = 'none';
+    inner += `</div>`; sub.innerHTML = inner; container.appendChild(sub);
+    // hide if teacher doesn't teach this subject
+    const teaches = (teacher.teaches_subjects||[]).includes(s.id);
+    sub.style.display = teaches ? 'block' : 'none';
   });
 }
-
-/* when toggling subject checkbox in edit modal, show/hide corresponding fixed grid */
 function onEditTeachSubToggle(subjectId){
   const cb = document.getElementById('edit_teach_sub_'+subjectId);
   const sub = document.getElementById('edit_fixed_subgrid_'+subjectId);
   if(!sub) return;
   sub.style.display = cb.checked ? 'block' : 'none';
 }
-
-/* construct fixed_assignments from edit modal */
 function collectFixedAssignmentsFromEditModal(){
-  const fixes = [];
-  const checks = document.querySelectorAll('#edit_teacher_fixed_container input[type=checkbox]');
-  checks.forEach(cb=>{
-    if(cb.checked){
-      fixes.push({ subject: cb.dataset.subject, class: cb.value });
-    }
-  });
+  const fixes=[]; const checks = document.querySelectorAll('#edit_teacher_fixed_container input[type=checkbox]');
+  checks.forEach(cb => { if(cb.checked) fixes.push({ subject: cb.dataset.subject, class: cb.value }); });
   return fixes;
 }
-
-/* save edited teacher */
 async function saveEditTeacher(){
   const id = document.getElementById('edit_teacher_id').value;
   const newName = document.getElementById('edit_teacher_name').value.trim();
   const weekly = document.getElementById('edit_teacher_weekly').value || 0;
-  const teaches = [];
-  currentData.subjects.forEach(s => {
-    const el = document.getElementById('edit_teach_sub_'+s.id);
-    if(el && el.checked) teaches.push(s.id);
-  });
+  const teaches=[]; (currentData.subjects||[]).forEach(s=>{ const el=document.getElementById('edit_teach_sub_'+s.id); if(el && el.checked) teaches.push(s.id); });
   const fixed_assignments = collectFixedAssignmentsFromEditModal();
-
-  // validation: fixed assignments subject must be in teaches
-  for(const fa of fixed_assignments){
-    if(!teaches.includes(fa.subject)){
-      alert(`Fix beosztás megadva tantárgyra (${fa.subject}), amelyet a tanár nem tanít (előbb jelöld be tantárgyként).`);
-      return;
-    }
-  }
-
-  const resp = await fetch('/update_teacher', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({id: id, new_name: newName, weekly_hours: weekly, teaches: teaches, fixed_assignments: fixed_assignments})
-  });
-  const j = await resp.json();
-  if(!j.success){ alert(j.error || 'Hiba'); return; }
-  closeModal('modal_teacher');
-  await refreshAll();
+  for(const fa of fixed_assignments){ if(!teaches.includes(fa.subject)){ alert('Fix beosztás olyan tantárgyra, amit a tanár nem tanít.'); return; } }
+  const resp = await fetch('/update_teacher',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:id, new_name:newName, weekly_hours: weekly, teaches: teaches, fixed_assignments: fixed_assignments})});
+  const j = await resp.json(); if(!j.success){ alert(j.error||'Hiba'); return; }
+  closeModal('modal_teacher'); await refreshAll(); showToast('Tanár mentve');
 }
-
-/* ---------- delete teacher ---------- */
 async function deleteTeacher(id){
   if(!confirm('Biztos törlöd a tanárt?')) return;
-  const resp = await fetch('/delete_teacher', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({id: id})
-  });
-  const j = await resp.json();
-  if(!j.success){ alert(j.error || 'Hiba'); return; }
-  await refreshAll();
+  const resp = await fetch('/delete_teacher',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id:id})});
+  const j = await resp.json(); if(!j.success){ alert(j.error||'Hiba'); return; }
+  await refreshAll(); showToast('Tanár törölve');
 }
 
 /* ---------- modal helpers ---------- */
-function openModal(id){ document.getElementById(id).style.display = 'flex'; }
-function closeModal(id){ document.getElementById(id).style.display = 'none'; }
+function openModal(id){ document.getElementById(id).style.display='flex'; }
+function closeModal(id){ document.getElementById(id).style.display='none'; }
 
-/* ---------- refresh ---------- */
+/* ---------- init / refresh ---------- */
 async function refreshAll(){
   const data = await fetchData();
+  renderClasses(data.classes || []);
+  renderSubjects(data.subjects || [], data.classes || []);
   renderTeachers(data.teachers || []);
-  renderSubjectCheckboxes();
-  // clear any fixed container
-  document.getElementById('teacher_fixed_container').innerHTML = '';
-  // ensure edit modal fixed container exists
-  const efc = document.getElementById('edit_teacher_fixed_container');
-  if(efc) efc.innerHTML = '';
+  // clear add-form fixed container (in case classes changed)
+  document.getElementById('teacher_fixed_container').innerHTML='';
+  // repopulate any edit modal grids if open
+  const efc = document.getElementById('edit_teacher_fixed_container'); if(efc) efc.innerHTML='';
+  // make sure add subject generated id hint updates
+  document.getElementById('subject_generated_id').textContent = '';
 }
+document.getElementById('subject_name_input').addEventListener('input', ()=>{
+  const name = document.getElementById('subject_name_input').value.trim();
+  if(!name){ document.getElementById('subject_generated_id').textContent=''; return; }
+  const base = normalizeLocal(name).slice(0,4) || 's';
+  // predict uniqueness roughly
+  const ids = (currentData && currentData.subjects) ? currentData.subjects.map(s=>s.id) : [];
+  if(!ids.includes(base)) document.getElementById('subject_generated_id').textContent = 'Javasolt azonosító: ' + base;
+  else { let i=2; while(ids.includes(base+i)) i++; document.getElementById('subject_generated_id').textContent = 'Javasolt azonosító: ' + base + i; }
+});
 
-/* run initial load */
 refreshAll();
-
 </script>
 </body>
 </html>
